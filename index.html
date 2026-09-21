@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JobEngine | Find your next move</title>
+  <style>
+    :root { --ink:#17231f; --muted:#66736d; --paper:#f4f1e8; --card:#fffdf8; --lime:#c8ed64; --coral:#ff765f; --line:#d7ddd0; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font-family:Georgia, 'Times New Roman', serif; }
+    body:before { content:''; display:block; height:9px; background:var(--ink); }
+    .shell { max-width:1180px; margin:0 auto; padding:28px 28px 56px; }
+    header { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding-bottom:22px; }
+    .brand { font-size:23px; font-weight:bold; letter-spacing:.02em; }
+    .brand span { color:var(--coral); }
+    .status { display:flex; align-items:center; gap:8px; color:var(--muted); font:12px Arial, sans-serif; text-transform:uppercase; letter-spacing:.13em; }
+    .dot { width:9px; height:9px; border-radius:50%; background:#65b85b; box-shadow:0 0 0 4px #dcebd1; }
+    .hero { padding:70px 0 52px; display:grid; grid-template-columns:1.25fr .75fr; gap:50px; align-items:end; }
+    h1 { font-size:clamp(48px, 7vw, 84px); line-height:.92; letter-spacing:-.04em; margin:0; max-width:700px; font-weight:normal; }
+    h1 em { color:var(--coral); font-style:normal; }
+    .intro { font:16px/1.6 Arial, sans-serif; color:var(--muted); max-width:340px; margin:0 0 7px; }
+    .toolbar { background:var(--ink); color:white; padding:20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+    .toolbar label { font:12px Arial, sans-serif; color:#b7c2ba; text-transform:uppercase; letter-spacing:.12em; }
+    input, select { border:0; background:#26352f; color:white; padding:14px 16px; font:15px Arial, sans-serif; outline:none; }
+    input { flex:1; min-width:220px; }
+    select { min-width:170px; }
+    .toolbar button { border:0; background:var(--lime); color:var(--ink); padding:14px 22px; font:bold 14px Arial, sans-serif; cursor:pointer; }
+    .summary { display:flex; justify-content:space-between; align-items:baseline; padding:40px 0 18px; }
+    .summary h2 { font-size:28px; font-weight:normal; margin:0; }
+    #count { color:var(--muted); font:13px Arial, sans-serif; }
+    .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
+    .job { background:var(--card); border:1px solid var(--line); padding:25px; min-height:190px; display:flex; flex-direction:column; justify-content:space-between; transition:transform .18s ease, border-color .18s ease; }
+    .job:hover { transform:translateY(-3px); border-color:var(--coral); }
+    .job-top { display:flex; justify-content:space-between; gap:15px; }
+    .job h3 { font-size:25px; font-weight:normal; line-height:1.05; margin:0; max-width:400px; }
+    .salary { color:var(--coral); font:bold 15px Arial, sans-serif; white-space:nowrap; }
+    .meta { display:flex; gap:20px; color:var(--muted); font:13px Arial, sans-serif; margin-top:28px; }
+    .empty { grid-column:1/-1; padding:45px; text-align:center; border:1px dashed var(--line); color:var(--muted); font:15px Arial, sans-serif; }
+    footer { margin-top:55px; color:var(--muted); font:12px Arial, sans-serif; border-top:1px solid var(--line); padding-top:16px; }
+    @media (max-width:700px) { .shell { padding:22px 18px 40px; } header { align-items:flex-start; gap:16px; } .status { font-size:10px; } .hero { display:block; padding:52px 0 35px; } .intro { margin-top:28px; } .toolbar { align-items:stretch; } input, select, .toolbar button { width:100%; } .grid { grid-template-columns:1fr; } .job h3 { font-size:22px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header><div class="brand">job<span>engine</span></div><div class="status"><i class="dot"></i> Live local feed</div></header>
+    <section class="hero"><h1>Good work is<br><em>out there.</em></h1><p class="intro">A focused shortlist of roles for people ready to make their next move. Search the live job feed below.</p></section>
+    <section class="toolbar" aria-label="Job filters">
+      <label for="search">Search</label><input id="search" type="search" placeholder="Role, company or city">
+      <label for="experience">Experience</label><select id="experience"><option value="0">New starter</option><option value="1" selected>1+ years</option><option value="3">3+ years</option><option value="5">5+ years</option></select>
+      <button id="refresh" type="button">Refresh roles</button>
+    </section>
+    <section class="summary"><h2>Open roles</h2><span id="count">Loading...</span></section>
+    <section id="jobs" class="grid" aria-live="polite"></section>
+    <footer>JobEngine / local opportunity index / <span id="updated"></span></footer>
+  </main>
+  <script>
+    const jobs = document.querySelector('#jobs');
+    const search = document.querySelector('#search');
+    const experience = document.querySelector('#experience');
+    const count = document.querySelector('#count');
+    let listings = [];
+    function render() {
+      const term = search.value.toLowerCase().trim();
+      const visible = listings.filter(job => [job.title, job.company, job.location].join(' ').toLowerCase().includes(term));
+      count.textContent = `${visible.length} role${visible.length === 1 ? '' : 's'} found`;
+      jobs.innerHTML = visible.length ? visible.map(job => `<article class="job"><div class="job-top"><h3>${job.title}</h3><span class="salary">R${job.salary.toLocaleString()}</span></div><div class="meta"><span>${job.company}</span><span>${job.location}</span></div></article>`).join('') : '<div class="empty">No roles match that search yet.</div>';
+    }
+    async function loadJobs() {
+      count.textContent = 'Loading...';
+      try {
+        const response = await fetch(`/jobs?experience=${experience.value}`);
+        if (!response.ok) throw new Error('Request failed');
+        listings = await response.json(); render(); document.querySelector('#updated').textContent = `updated ${new Date().toLocaleTimeString()}`;
+      } catch (error) { jobs.innerHTML = '<div class="empty">Could not reach the live job feed.</div>'; count.textContent = 'Offline'; }
+    }
+    search.addEventListener('input', render); experience.addEventListener('change', loadJobs); document.querySelector('#refresh').addEventListener('click', loadJobs); loadJobs();
+  </script>
+</body>
+</html>
