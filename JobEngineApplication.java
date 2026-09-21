@@ -2,120 +2,75 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.logging.Logger;
-import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Main Entry Class for the JobEngine Enterprise Infrastructure.
- * Tailored for high-concurrency database loops and candidate matching.
- * 
- * Target Portfolio Net Worth: $50 Million Asset.
- * Blueprint State: Small Boat Floating Safely. Zero Stress.
- */
 public class JobEngineApplication {
+    private record Job(String title, String company, String location, int salary, int experience) {}
 
-    private static final Logger logger = Logger.getLogger(JobEngineApplication.class.getName());
-    
-    // Thread-safe map to log active sessions when scaling up to 100,000 global users
-    private final ConcurrentHashMap<String, String> activeUserSessionRegistry;
-    private final double compilationLevel;
+    private static final List<Job> JOBS = List.of(
+            new Job("Junior Java Developer", "Entelect", "Melrose Arch", 25000, 0),
+            new Job("Web Assistant (Frontend)", "Adcorp Group", "Sandton", 22000, 0),
+            new Job("IT Systems Intern", "Hire Resolve", "Bryanston", 18000, 0),
+            new Job("Software Support Tech", "Private Security Hub", "Midrand", 24000, 0));
 
-    public JobEngineApplication() {
-        this.activeUserSessionRegistry = new ConcurrentHashMap<>();
-        this.compilationLevel = 0.80; // Hardcoded state matching your exact blueprint
+    public static void main(String[] args) throws IOException {
+        int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.createContext("/", exchange -> serveFile(exchange, "index.html", "text/html; charset=utf-8"));
+        server.createContext("/health", exchange -> respond(exchange, 200, "{\"status\":\"ok\"}", "application/json"));
+        server.createContext("/jobs", JobEngineApplication::serveJobs);
+        server.createContext("/subscribe", JobEngineApplication::serveSubscription);
+        server.start();
+        System.out.println("JobEngine live on port " + port);
     }
 
-    /**
-     * Primary system runtime entry point for execution.
-     */
-    public static void main(String[] args) {
-        System.out.println("\n========================================================");
-        logger.info("Initializing JobEngine Application Platform...");
-        System.out.println("========================================================\n");
-        
-        JobEngineApplication platformInstance = new JobEngineApplication();
-        platformInstance.bootstrapSystemInfrastructure();
-        platformInstance.startHttpServer();
+    private static void serveJobs(HttpExchange exchange) throws IOException {
+        String response = JOBS.stream()
+                .map(job -> String.format("{\"title\":\"%s\",\"company\":\"%s\",\"location\":\"%s\",\"salary\":%d}",
+                        job.title(), job.company(), job.location(), job.salary()))
+                .toList().toString().replace("=", ":");
+        respond(exchange, 200, response, "application/json");
     }
 
-    /**
-     * Orchestrates backend service boot sequences and logs cloud status.
-     */
-    private void bootstrapSystemInfrastructure() {
-        logger.info("Routing cloud pipeline gateways (Location: Overseas Servers)...");
-        logger.info(String.format("Core System Integrity Mapping: %.0f%% Operational", (compilationLevel * 100)));
-        
-        if (compilationLevel < 1.0) {
-            System.out.println("\n--------------------------------------------------------");
-            logger.warning("SYSTEM FLAG: 'Unfinished Work' parameter triggered.");
-            logger.info("ACTION REQUIRED: Pausing deployment loops on local machine.");
-            logger.info("STRATEGY: Prioritize Grade 11 core dependencies immediately.");
-            System.out.println("STATUS CODE 200: Small boat gliding smoothly. Zero panic.");
-            System.out.println("--------------------------------------------------------\n");
-        } else {
-            logger.info("PRODUCTION DEPLOYMENT SUCCESSFUL: JobEngine is live globally.");
+    private static void serveSubscription(HttpExchange exchange) throws IOException {
+        String merchantId = System.getenv().getOrDefault("PAYFAST_MERCHANT_ID", "");
+        String merchantKey = System.getenv().getOrDefault("PAYFAST_MERCHANT_KEY", "");
+        if (merchantId.isBlank() || merchantKey.isBlank()) {
+            respond(exchange, 503, "Payment setup is not complete. Add PayFast credentials in Render.", "text/plain");
+            return;
         }
+        String returnUrl = System.getenv().getOrDefault("PAYFAST_RETURN_URL", "http://localhost:8080/");
+        String cancelUrl = System.getenv().getOrDefault("PAYFAST_CANCEL_URL", returnUrl);
+        String notifyUrl = System.getenv().getOrDefault("PAYFAST_NOTIFY_URL", returnUrl + "health");
+        String form = "<form id=\"payfast\" action=\"https://www.payfast.co.za/eng/process\" method=\"post\">"
+                + hidden("merchant_id", merchantId) + hidden("merchant_key", merchantKey)
+                + hidden("amount", "99.00") + hidden("item_name", "JobEngine Premium Subscription")
+                + hidden("return_url", returnUrl) + hidden("cancel_url", cancelUrl)
+                + hidden("notify_url", notifyUrl) + "</form><script>document.getElementById('payfast').submit()</script>";
+        respond(exchange, 200, "<!doctype html><html><body>Redirecting to PayFast..." + form + "</body></html>", "text/html");
     }
 
-    private void startHttpServer() {
+    private static String hidden(String name, String value) {
+        return "<input type=\"hidden\" name=\"" + name + "\" value=\"" + value + "\">";
+    }
+
+    private static void serveFile(HttpExchange exchange, String file, String type) throws IOException {
         try {
-            JobProvider provider = () -> List.of(
-                    new JobListing("Junior Java Developer", "Entelect", "Melrose Arch", 25000),
-                    new JobListing("Web Assistant (Frontend)", "Adcorp Group", "Sandton", 22000),
-                    new JobListing("IT Systems Intern", "Hire Resolve", "Bryanston", 18000),
-                    new JobListing("Software Support Tech", "Private Security Hub", "Midrand", 24000));
-            JobEngine engine = new JobEngine(provider, new InMemoryJobRepository());
-            int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8080"));
-            HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext("/", exchange -> {
-                try {
-                    sendResponse(exchange, 200, Files.readString(Path.of("index.html")), "text/html; charset=utf-8");
-                } catch (IOException exception) {
-                    sendResponse(exchange, 500, "{\"error\":\"Web interface unavailable\"}", "application/json; charset=utf-8");
-                }
-            });
-            server.createContext("/health", exchange -> sendResponse(exchange, 200, "{\"status\":\"ok\"}"));
-            server.createContext("/jobs", exchange -> {
-                int experience = parseExperience(exchange.getRequestURI().getQuery());
-                List<JobListing> jobs = engine.vetJobsForExperience(experience);
-                String response = jobs.stream()
-                        .map(job -> String.format(
-                                "{\"title\":\"%s\",\"company\":\"%s\",\"location\":\"%s\",\"salary\":%d}",
-                                job.getTitle(), job.getCompany(), job.getLocation(), job.getSalary()))
-                        .toList().toString().replace("=", ":");
-                sendResponse(exchange, 200, response, "application/json; charset=utf-8");
-            });
-            server.start();
-            logger.info("JobEngine is live on port " + port);
+            respond(exchange, 200, Files.readString(Path.of(file)), type);
         } catch (IOException exception) {
-            logger.severe("Unable to start HTTP server: " + exception.getMessage());
+            respond(exchange, 500, "{\"error\":\"Web file unavailable\"}", "application/json");
         }
     }
 
-    private static int parseExperience(String query) {
-        if (query != null && query.startsWith("experience=")) {
-            try {
-                return Integer.parseInt(query.substring("experience=".length()));
-            } catch (NumberFormatException ignored) {
-                return 0;
-            }
-        }
-        return 0;
-    }
-
-    private static void sendResponse(HttpExchange exchange, int status, String body) throws IOException {
-        sendResponse(exchange, status, body, "application/json; charset=utf-8");
-    }
-
-    private static void sendResponse(HttpExchange exchange, int status, String body, String contentType) throws IOException {
-        byte[] response = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", contentType);
-        exchange.sendResponseHeaders(status, response.length);
-        try (var outputStream = exchange.getResponseBody()) {
-            outputStream.write(response);
+    private static void respond(HttpExchange exchange, int status, String body, String type) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", type + "; charset=utf-8");
+        exchange.sendResponseHeaders(status, bytes.length);
+        try (var output = exchange.getResponseBody()) {
+            output.write(bytes);
         }
     }
 }
